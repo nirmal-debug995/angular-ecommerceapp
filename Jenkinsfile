@@ -5,30 +5,24 @@ pipeline {
         ACR_NAME = "fullstackangularapp"
         ACR_LOGIN_SERVER = "fullstackangularapp.azurecr.io"
         RESOURCE_GROUP = "fullstackangular-rg"
-
         BACKEND_IMAGE = "backend:v1"
         FRONTEND_IMAGE = "frontend:v1"
-
-        GIT_BRANCH = "main"
-        GIT_REPO = "https://github.com/nirmal-debug995/angular-ecommerceapp.git"
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
-                git branch: "${GIT_BRANCH}",
-                    url: "${GIT_REPO}",
-                    credentialsId: 'github-creds'
+                git credentialsId: 'github-creds',
+                    url: 'https://github.com/nirmal-debug995/angular-ecommerceapp.git',
+                    branch: 'main'
             }
         }
 
         stage('Build Backend Image') {
             steps {
                 dir('backend') {
-                    sh '''
-                    docker build -t $ACR_LOGIN_SERVER/$BACKEND_IMAGE .
-                    '''
+                    sh 'docker build -t $ACR_LOGIN_SERVER/$BACKEND_IMAGE .'
                 }
             }
         }
@@ -36,9 +30,7 @@ pipeline {
         stage('Build Frontend Image') {
             steps {
                 dir('client') {
-                    sh '''
-                    docker build -t $ACR_LOGIN_SERVER/$FRONTEND_IMAGE .
-                    '''
+                    sh 'docker build -t $ACR_LOGIN_SERVER/$FRONTEND_IMAGE .'
                 }
             }
         }
@@ -69,12 +61,24 @@ pipeline {
 
         stage('Deploy to ACI') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'acr-creds',
-                    usernameVariable: 'ACR_USER',
-                    passwordVariable: 'ACR_PASS'
-                )]) {
+                withCredentials([string(credentialsId: 'azure-sp-json', variable: 'AZURE_SP_JSON')]) {
                     sh '''
+                    echo "Logging into Azure using Service Principal..."
+
+                    echo $AZURE_SP_JSON > sp.json
+
+                    export AZURE_CLIENT_ID=$(cat sp.json | jq -r .clientId)
+                    export AZURE_CLIENT_SECRET=$(cat sp.json | jq -r .clientSecret)
+                    export AZURE_TENANT_ID=$(cat sp.json | jq -r .tenantId)
+                    export AZURE_SUBSCRIPTION_ID=$(cat sp.json | jq -r .subscriptionId)
+
+                    az login --service-principal \
+                      -u $AZURE_CLIENT_ID \
+                      -p $AZURE_CLIENT_SECRET \
+                      --tenant $AZURE_TENANT_ID
+
+                    az account set --subscription $AZURE_SUBSCRIPTION_ID
+
                     echo "Deploying Backend..."
 
                     az container delete \
