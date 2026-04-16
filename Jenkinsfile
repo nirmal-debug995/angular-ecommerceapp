@@ -5,16 +5,21 @@ pipeline {
         ACR_NAME = "fullstackangularapp"
         ACR_LOGIN_SERVER = "fullstackangularapp.azurecr.io"
         RESOURCE_GROUP = "fullstackangular-rg"
+
         BACKEND_IMAGE = "backend:v1"
         FRONTEND_IMAGE = "frontend:v1"
+
+        GIT_BRANCH = "main"
+        GIT_REPO = "https://github.com/nirmal-debug995/angular-ecommerceapp.git"
     }
 
     stages {
 
-        stage('Clone Repo') {
+        stage('Checkout Code') {
             steps {
-                git credentialsId: 'github-creds',
-                    url: 'https://github.com/nirmal-debug995/angular-ecommerceapp.git'
+                git branch: "${GIT_BRANCH}",
+                    url: "${GIT_REPO}",
+                    credentialsId: 'github-creds'
             }
         }
 
