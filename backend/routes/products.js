@@ -2,44 +2,91 @@ const express = require("express");
 const router = express.Router();
 const db = require("../database/db");
 
-// GET ALL PRODUCTS
-router.get("/", async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+// =========================
+// GET ALL PRODUCTS (SAFE)
+// =========================
+router.get("/", (req, res) => {
+  let { page = 1, limit = 10 } = req.query;
 
-  let startValue;
-  let endValue;
+  page = parseInt(page);
+  limit = parseInt(limit);
 
-  if (page > 0) {
-    startValue = page * limit - limit; // 0,10,20,30
-    endValue = page * limit;
-  } else {
-    startValue = 0;
-    endValue = 10;
-  }
+  if (isNaN(page) || page < 1) page = 1;
+  if (isNaN(limit) || limit < 1) limit = 10;
 
-  db.query(
-    `SELECT p.id, p.title, p.image, p.price, p.short_desc, p.quantity,
-        c.title as category FROM products p JOIN categories c ON
-            c.id = p.cat_id LIMIT ${startValue}, ${limit}`,
-    (err, results) => {
-      if (err) console.log(err);
-      else res.json(results);
+  const startValue = (page - 1) * limit;
+
+  const query = `
+    SELECT 
+      p.id,
+      p.title,
+      p.image,
+      p.price,
+      p.short_desc,
+      p.quantity,
+      COALESCE(c.title, 'Uncategorized') as category
+    FROM products p
+    LEFT JOIN categories c ON c.id = p.cat_id
+    LIMIT ?, ?
+  `;
+
+  db.query(query, [startValue, limit], (err, results) => {
+    if (err) {
+      console.error("DB Error (products list):", err);
+      return res.status(500).json({
+        error: "Database query failed",
+        details: err.message
+      });
     }
-  );
+
+    return res.json(results);
+  });
 });
 
-// GET SINGLE PRODUCT BY ID
-router.get("/:productId", async (req, res) => {
-  const { productId } = req.params;
-  db.query(
-    `SELECT p.id, p.title, p.image, p.images, p.description, p.price, p.quantity, p.short_desc,
-        c.title as category FROM products p JOIN categories c ON
-            c.id = p.cat_id WHERE p.id = ${productId}`,
-    (err, results) => {
-      if (err) console.log(err);
-      else res.json(results[0]);
+// =========================
+// GET SINGLE PRODUCT
+// =========================
+router.get("/:productId", (req, res) => {
+  const productId = parseInt(req.params.productId);
+
+  if (isNaN(productId)) {
+    return res.status(400).json({
+      error: "Invalid product ID"
+    });
+  }
+
+  const query = `
+    SELECT 
+      p.id,
+      p.title,
+      p.image,
+      p.images,
+      p.description,
+      p.price,
+      p.quantity,
+      COALESCE(c.title, 'Uncategorized') as category
+    FROM products p
+    LEFT JOIN categories c ON c.id = p.cat_id
+    WHERE p.id = ?
+  `;
+
+  db.query(query, [productId], (err, results) => {
+    if (err) {
+      console.error("DB Error (single product):", err);
+      return res.status(500).json({
+        error: "Database query failed",
+        details: err.message
+      });
     }
-  );
+
+    if (!results || results.length === 0) {
+      return res.status(404).json({
+        error: "Product not found"
+      });
+    }
+
+    return res.json(results[0]);
+  });
 });
 
 module.exports = router;
